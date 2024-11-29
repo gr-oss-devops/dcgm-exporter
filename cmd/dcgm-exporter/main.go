@@ -26,9 +26,7 @@ import (
 	"github.com/NVIDIA/dcgm-exporter/pkg/cmd"
 )
 
-var (
-	BuildVersion = "Filled by the build system"
-)
+var BuildVersion = "Filled by the build system"
 
 func main() {
 	app := cmd.NewApp(BuildVersion)

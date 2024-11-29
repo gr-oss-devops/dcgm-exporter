@@ -24,6 +24,7 @@ import (
 
 	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
 	"github.com/prometheus/exporter-toolkit/web"
+	"go.opentelemetry.io/otel/metric"
 )
 
 var (
@@ -69,6 +70,14 @@ type MetricsPipeline struct {
 	linkCollector   *DCGMCollector
 	cpuCollector    *DCGMCollector
 	coreCollector   *DCGMCollector
+
+	otelMeters *OtelMeters
+}
+
+type OtelMeters struct {
+	Gauge     map[string]metric.Float64Gauge
+	Counter   map[string]metric.Int64Counter
+	Histogram map[string]metric.Float64Histogram
 }
 
 type DCGMCollector struct {

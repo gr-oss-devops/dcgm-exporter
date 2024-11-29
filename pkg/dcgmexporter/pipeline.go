@@ -18,13 +18,17 @@ package dcgmexporter
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"text/template"
 	"time"
 
 	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
 
 func NewMetricsPipeline(config *Config,
@@ -92,6 +96,35 @@ func NewMetricsPipeline(config *Config,
 	}
 
 	transformations := getTransformations(config)
+
+	var otelMeters *OtelMeters
+	if config.OtelMeter != nil {
+		otelMeters = &OtelMeters{
+			Gauge:     make(map[string]metric.Float64Gauge),
+			Counter:   make(map[string]metric.Int64Counter),
+			Histogram: make(map[string]metric.Float64Histogram),
+		}
+
+		for _, counter := range counters {
+			switch counter.PromType {
+			case "gauge":
+				otelMeters.Gauge[counter.FieldName], err = config.OtelMeter.Float64Gauge(counter.FieldName, metric.WithDescription(counter.Help))
+				if err != nil {
+					logrus.Warnf("Failed to create gauge metric %s: %v", counter.FieldName, err)
+				}
+			case "counter":
+				otelMeters.Counter[counter.FieldName], err = config.OtelMeter.Int64Counter(counter.FieldName, metric.WithDescription(counter.Help))
+				if err != nil {
+					logrus.Warnf("Failed to create counter metric %s: %v", counter.FieldName, err)
+				}
+			case "histogram":
+				otelMeters.Histogram[counter.FieldName], err = config.OtelMeter.Float64Histogram(counter.FieldName, metric.WithDescription(counter.Help))
+				if err != nil {
+					logrus.Warnf("Failed to create histogram metric %s: %v", counter.FieldName, err)
+				}
+			}
+		}
+	}
 
 	return &MetricsPipeline{
 			config: config,
@@ -200,6 +233,46 @@ func (m *MetricsPipeline) run() (string, error) {
 			err := transform.Process(metrics, m.gpuCollector.SysInfo)
 			if err != nil {
 				return "", fmt.Errorf("failed to transform metrics for transform '%s'; err: %w", transform.Name(), err)
+			}
+		}
+
+		for counter, metricVals := range metrics {
+			attrs := make([]attribute.KeyValue, 0, 4)
+			for _, metricVal := range metricVals {
+				attrs = append(attrs, attribute.String("gpu", metricVal.GPU))
+				attrs = append(attrs, attribute.String(metricVal.UUID, metricVal.GPUUUID))
+				attrs = append(attrs, attribute.String("pci_bus_id", metricVal.GPUPCIBusID))
+				attrs = append(attrs, attribute.String("device", metricVal.GPUDevice))
+				attrs = append(attrs, attribute.String("modelName", metricVal.GPUModelName))
+				if metricVal.MigProfile != "" {
+					attrs = append(attrs, attribute.String("GPU_I_PROFILE", metricVal.MigProfile))
+					attrs = append(attrs, attribute.String("GPU_I_ID", metricVal.GPUInstanceID))
+				}
+				if metricVal.Hostname != "" {
+					attrs = append(attrs, attribute.String("Hostname", metricVal.Hostname))
+				}
+				for k, v := range metricVal.Labels {
+					attrs = append(attrs, attribute.String(k, v))
+				}
+				for k, v := range metricVal.Attributes {
+					attrs = append(attrs, attribute.String(k, v))
+				}
+			}
+			switch counter.PromType {
+			case "counter":
+				c, ok := m.otelMeters.Counter[counter.FieldName]
+				if !ok {
+					logrus.Warnf("Counter %s not found in otelMeters", counter.FieldName)
+					continue
+				}
+				for _, metricVal := range metricVals {
+					val, err := strconv.ParseInt(metricVal.Value, 10, 64)
+					if err != nil {
+						logrus.Warnf("Failed to parse metric value %s as int64: %v", metricVal.Value, err)
+						continue
+					}
+					c.Add(context.TODO(), val, metric.WithAttributes(attrs...))
+				}
 			}
 		}
 

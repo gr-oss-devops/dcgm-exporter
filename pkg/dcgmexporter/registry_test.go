@@ -103,6 +103,5 @@ func TestRegistry_Gather(t *testing.T) {
 			tc.assert(got, err)
 			mockCall.Unset()
 		})
-
 	}
 }

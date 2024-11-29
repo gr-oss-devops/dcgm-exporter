@@ -16,7 +16,10 @@
 
 package dcgmexporter
 
-import "github.com/NVIDIA/go-dcgm/pkg/dcgm"
+import (
+	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
+	"go.opentelemetry.io/otel/metric"
+)
 
 type KubernetesGPUIDType string
 
@@ -59,4 +62,6 @@ type Config struct {
 	PodResourcesKubeletSocket  string
 	HPCJobMappingDir           string
 	NvidiaResourceNames        []string
+	OtelCollector              string
+	OtelMeter                  metric.Meter
 }

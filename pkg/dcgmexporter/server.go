@@ -67,6 +67,7 @@ func NewMetricsServer(c *Config, metrics chan string, registry *Registry) (*Metr
 
 	router.HandleFunc("/health", serverv1.Health)
 	router.HandleFunc("/metrics", serverv1.Metrics)
+	router.HandleFunc("/otel-metrics", serverv1.OTELMetrics)
 
 	return serverv1, func() {}, nil
 }
@@ -129,6 +130,9 @@ func (s *MetricsServer) Metrics(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to write response", http.StatusInternalServerError)
 		return
 	}
+}
+
+func (s *MetricsServer) OTELMetrics(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *MetricsServer) Health(w http.ResponseWriter, r *http.Request) {

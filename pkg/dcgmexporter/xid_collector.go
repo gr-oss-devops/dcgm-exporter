@@ -35,7 +35,8 @@ func (c *xidCollector) GetMetrics() (MetricsByCounter, error) {
 func NewXIDCollector(counters []Counter,
 	hostname string,
 	config *Config,
-	fieldEntityGroupTypeSystemInfo FieldEntityGroupTypeSystemInfoItem) (Collector, error) {
+	fieldEntityGroupTypeSystemInfo FieldEntityGroupTypeSystemInfoItem,
+) (Collector, error) {
 	if !IsDCGMExpXIDErrorsCountEnabled(counters) {
 		logrus.Error(dcgmExpXIDErrorsCount + " collector is disabled")
 		return nil, fmt.Errorf(dcgmExpXIDErrorsCount + " collector is disabled")
