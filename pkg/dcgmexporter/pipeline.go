@@ -222,6 +222,7 @@ func (m *MetricsPipeline) run() (string, error) {
 	var err error
 	var formatted string
 
+	ctx := context.TODO()
 	if m.gpuCollector != nil {
 		/* Collect GPU Metrics */
 		metrics, err = m.gpuCollector.GetMetrics()
@@ -237,7 +238,14 @@ func (m *MetricsPipeline) run() (string, error) {
 		}
 
 		for counter, metricVals := range metrics {
-			attrs := make([]attribute.KeyValue, 0, 4)
+			n := 5 + len(metricVals[0].Labels) + len(metricVals[0].Attributes)
+			if metricVals[0].MigProfile != "" {
+				n += 2
+			}
+			if metricVals[0].Hostname != "" {
+				n++
+			}
+			attrs := make([]attribute.KeyValue, 0, n)
 			for _, metricVal := range metricVals {
 				attrs = append(attrs, attribute.String("gpu", metricVal.GPU))
 				attrs = append(attrs, attribute.String(metricVal.UUID, metricVal.GPUUUID))
@@ -257,22 +265,7 @@ func (m *MetricsPipeline) run() (string, error) {
 				for k, v := range metricVal.Attributes {
 					attrs = append(attrs, attribute.String(k, v))
 				}
-			}
-			switch counter.PromType {
-			case "counter":
-				c, ok := m.otelMeters.Counter[counter.FieldName]
-				if !ok {
-					logrus.Warnf("Counter %s not found in otelMeters", counter.FieldName)
-					continue
-				}
-				for _, metricVal := range metricVals {
-					val, err := strconv.ParseInt(metricVal.Value, 10, 64)
-					if err != nil {
-						logrus.Warnf("Failed to parse metric value %s as int64: %v", metricVal.Value, err)
-						continue
-					}
-					c.Add(context.TODO(), val, metric.WithAttributes(attrs...))
-				}
+				m.OtelObserve(ctx, counter, metricVal, attrs...)
 			}
 		}
 
@@ -287,6 +280,27 @@ func (m *MetricsPipeline) run() (string, error) {
 		metrics, err = m.switchCollector.GetMetrics()
 		if err != nil {
 			return "", fmt.Errorf("failed to collect switch metrics; err: %w", err)
+		}
+
+		for counter, metrics := range metrics {
+			n := 2 + len(metrics[0].Labels) + len(metrics[0].Attributes)
+			if metrics[0].Hostname != "" {
+				n++
+			}
+			attrs := make([]attribute.KeyValue, 0, n)
+			for _, metricVal := range metrics {
+				attrs = append(attrs, attribute.String("nvswitch", metricVal.GPU))
+				if metricVal.Hostname != "" {
+					attrs = append(attrs, attribute.String("Hostname", metricVal.Hostname))
+				}
+				for k, v := range metricVal.Labels {
+					attrs = append(attrs, attribute.String(k, v))
+				}
+				for k, v := range metricVal.Attributes {
+					attrs = append(attrs, attribute.String(k, v))
+				}
+				m.OtelObserve(ctx, counter, metricVal, attrs...)
+			}
 		}
 
 		if len(metrics) > 0 {
@@ -306,6 +320,28 @@ func (m *MetricsPipeline) run() (string, error) {
 			return "", fmt.Errorf("failed to collect link metrics; err: %w", err)
 		}
 
+		for counter, metrics := range metrics {
+			n := 2 + len(metrics[0].Labels) + len(metrics[0].Attributes)
+			if metrics[0].Hostname != "" {
+				n++
+			}
+			attrs := make([]attribute.KeyValue, 0, n)
+			for _, metricVal := range metrics {
+				attrs = append(attrs, attribute.String("nvlink", metricVal.GPU))
+				attrs = append(attrs, attribute.String("nvswitch", metricVal.GPUDevice))
+				if metricVal.Hostname != "" {
+					attrs = append(attrs, attribute.String("Hostname", metricVal.Hostname))
+				}
+				for k, v := range metricVal.Labels {
+					attrs = append(attrs, attribute.String(k, v))
+				}
+				for k, v := range metricVal.Attributes {
+					attrs = append(attrs, attribute.String(k, v))
+				}
+				m.OtelObserve(ctx, counter, metricVal, attrs...)
+			}
+		}
+
 		if len(metrics) > 0 {
 			switchFormatted, err := FormatMetrics(m.linkMetricsFormat, metrics)
 			if err != nil {
@@ -321,6 +357,27 @@ func (m *MetricsPipeline) run() (string, error) {
 		metrics, err = m.cpuCollector.GetMetrics()
 		if err != nil {
 			return "", fmt.Errorf("failed to collect CPU metrics; err: %w", err)
+		}
+
+		for counter, metrics := range metrics {
+			n := 1 + len(metrics[0].Labels) + len(metrics[0].Attributes)
+			if metrics[0].Hostname != "" {
+				n++
+			}
+			attrs := make([]attribute.KeyValue, 0, n)
+			for _, metricVal := range metrics {
+				attrs = append(attrs, attribute.String("cpu", metricVal.GPU))
+				if metricVal.Hostname != "" {
+					attrs = append(attrs, attribute.String("Hostname", metricVal.Hostname))
+				}
+				for k, v := range metricVal.Labels {
+					attrs = append(attrs, attribute.String(k, v))
+				}
+				for k, v := range metricVal.Attributes {
+					attrs = append(attrs, attribute.String(k, v))
+				}
+				m.OtelObserve(ctx, counter, metricVal, attrs...)
+			}
 		}
 
 		if len(metrics) > 0 {
@@ -340,6 +397,29 @@ func (m *MetricsPipeline) run() (string, error) {
 			return "", fmt.Errorf("failed to collect CPU core metrics; err: %w", err)
 		}
 
+		for counter, metrics := range metrics {
+			n := 2 + len(metrics[0].Labels) + len(metrics[0].Attributes)
+			if metrics[0].Hostname != "" {
+				n++
+			}
+			attrs := make([]attribute.KeyValue, 0, n)
+			for _, metricVal := range metrics {
+				attrs = append(attrs, attribute.String("cpucore", metricVal.GPU))
+				attrs = append(attrs, attribute.String("cpu", metricVal.GPUDevice))
+				if metricVal.Hostname != "" {
+					attrs = append(attrs, attribute.String("Hostname", metricVal.Hostname))
+				}
+				for k, v := range metricVal.Labels {
+					attrs = append(attrs, attribute.String(k, v))
+				}
+				for k, v := range metricVal.Attributes {
+					attrs = append(attrs, attribute.String(k, v))
+				}
+				m.OtelObserve(ctx, counter, metricVal, attrs...)
+			}
+
+		}
+
 		if len(metrics) > 0 {
 			coreFormatted, err := FormatMetrics(m.cpuCoreMetricsFormat, metrics)
 			if err != nil {
@@ -351,6 +431,47 @@ func (m *MetricsPipeline) run() (string, error) {
 	}
 
 	return formatted, nil
+}
+
+func (m *MetricsPipeline) OtelObserve(ctx context.Context, counter Counter, metricVal Metric, attrs ...attribute.KeyValue) {
+	switch counter.PromType {
+	case "counter":
+		c, ok := m.otelMeters.Counter[counter.FieldName]
+		if !ok {
+			logrus.Warnf("Counter %s not found in otelMeters", counter.FieldName)
+			return
+		}
+		val, err := strconv.ParseInt(metricVal.Value, 10, 64)
+		if err != nil {
+			logrus.Warnf("Failed to parse metric value %s as int64: %v", metricVal.Value, err)
+			return
+		}
+		c.Add(ctx, val, metric.WithAttributes(attrs...))
+	case "gauge":
+		g, ok := m.otelMeters.Gauge[counter.FieldName]
+		if !ok {
+			logrus.Warnf("Gauge %s not found in otelMeters", counter.FieldName)
+			return
+		}
+		val, err := strconv.ParseFloat(metricVal.Value, 64)
+		if err != nil {
+			logrus.Warnf("Failed to parse metric value %s as float64: %v", metricVal.Value, err)
+			return
+		}
+		g.Record(ctx, val, metric.WithAttributes(attrs...))
+	case "histogram":
+		h, ok := m.otelMeters.Histogram[counter.FieldName]
+		if !ok {
+			logrus.Warnf("Histogram %s not found in otelMeters", counter.FieldName)
+			return
+		}
+		val, err := strconv.ParseFloat(metricVal.Value, 64)
+		if err != nil {
+			logrus.Warnf("Failed to parse metric value %s as float64: %v", metricVal.Value, err)
+			return
+		}
+		h.Record(ctx, val, metric.WithAttributes(attrs...))
+	}
 }
 
 /*
