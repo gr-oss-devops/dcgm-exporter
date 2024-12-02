@@ -144,7 +144,7 @@ func NewMetricsPipeline(config *Config,
 			cpuCollector:    cpuCollector,
 			coreCollector:   coreCollector,
 			otelMeters:      otelMeters,
-			gpuCounters:     make(map[dcgm.Short]uint64),
+			gpuCounters:     make(map[string]uint64),
 		}, func() {
 			for _, cleanup := range cleanups {
 				cleanup()
@@ -246,14 +246,27 @@ func (m *MetricsPipeline) run() (string, error) {
 
 		extended := maps.Clone(metrics)
 		for counter, metricVals := range metrics {
-			target := counter
-			target.FieldName += "_COUNTER"
-			target.PromType = "counter"
+			newCounter := counter
+			newCounter.FieldName += "_COUNTER"
+			newCounter.PromType = "counter"
+			newMetrics := make([]Metric, 0, len(metricVals))
 			for _, metricVal := range metricVals {
+				fp := metricVal.metricFingerprint()
+				val, err := strconv.ParseUint(metricVal.Value, 10, 64)
+				if err != nil {
+					logrus.Warnf("Failed to parse metric value %s as uint64: %v", metricVal.Value, err)
+					continue
+				}
+				m.gpuCounters[fp] += val
+				newMetricVal := metricVal
+				newMetricVal.Counter = newCounter
+				newMetricVal.Value = strconv.FormatUint(m.gpuCounters[fp], 10)
+				newMetrics = append(newMetrics, newMetricVal)
 			}
+			extended[newCounter] = newMetrics
 		}
 
-		formatted, err = FormatMetrics(m.migMetricsFormat, metrics)
+		formatted, err = FormatMetrics(m.migMetricsFormat, extended)
 		if err != nil {
 			return "", fmt.Errorf("failed to format metrics; err: %w", err)
 		}
