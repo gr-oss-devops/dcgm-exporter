@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"maps"
 	"strconv"
 	"sync"
 	"text/template"
@@ -142,6 +143,8 @@ func NewMetricsPipeline(config *Config,
 			transformations: transformations,
 			cpuCollector:    cpuCollector,
 			coreCollector:   coreCollector,
+			otelMeters:      otelMeters,
+			gpuCounters:     make(map[dcgm.Short]uint64),
 		}, func() {
 			for _, cleanup := range cleanups {
 				cleanup()
@@ -237,35 +240,16 @@ func (m *MetricsPipeline) run() (string, error) {
 			}
 		}
 
+		if m.config.OtelMeter != nil {
+			m.OtelObserveGpuMetrics(ctx, metrics)
+		}
+
+		extended := maps.Clone(metrics)
 		for counter, metricVals := range metrics {
-			n := 5 + len(metricVals[0].Labels) + len(metricVals[0].Attributes)
-			if metricVals[0].MigProfile != "" {
-				n += 2
-			}
-			if metricVals[0].Hostname != "" {
-				n++
-			}
-			attrs := make([]attribute.KeyValue, 0, n)
+			target := counter
+			target.FieldName += "_COUNTER"
+			target.PromType = "counter"
 			for _, metricVal := range metricVals {
-				attrs = append(attrs, attribute.String("gpu", metricVal.GPU))
-				attrs = append(attrs, attribute.String(metricVal.UUID, metricVal.GPUUUID))
-				attrs = append(attrs, attribute.String("pci_bus_id", metricVal.GPUPCIBusID))
-				attrs = append(attrs, attribute.String("device", metricVal.GPUDevice))
-				attrs = append(attrs, attribute.String("modelName", metricVal.GPUModelName))
-				if metricVal.MigProfile != "" {
-					attrs = append(attrs, attribute.String("GPU_I_PROFILE", metricVal.MigProfile))
-					attrs = append(attrs, attribute.String("GPU_I_ID", metricVal.GPUInstanceID))
-				}
-				if metricVal.Hostname != "" {
-					attrs = append(attrs, attribute.String("Hostname", metricVal.Hostname))
-				}
-				for k, v := range metricVal.Labels {
-					attrs = append(attrs, attribute.String(k, v))
-				}
-				for k, v := range metricVal.Attributes {
-					attrs = append(attrs, attribute.String(k, v))
-				}
-				m.OtelObserve(ctx, counter, metricVal, attrs...)
 			}
 		}
 
@@ -282,25 +266,8 @@ func (m *MetricsPipeline) run() (string, error) {
 			return "", fmt.Errorf("failed to collect switch metrics; err: %w", err)
 		}
 
-		for counter, metrics := range metrics {
-			n := 2 + len(metrics[0].Labels) + len(metrics[0].Attributes)
-			if metrics[0].Hostname != "" {
-				n++
-			}
-			attrs := make([]attribute.KeyValue, 0, n)
-			for _, metricVal := range metrics {
-				attrs = append(attrs, attribute.String("nvswitch", metricVal.GPU))
-				if metricVal.Hostname != "" {
-					attrs = append(attrs, attribute.String("Hostname", metricVal.Hostname))
-				}
-				for k, v := range metricVal.Labels {
-					attrs = append(attrs, attribute.String(k, v))
-				}
-				for k, v := range metricVal.Attributes {
-					attrs = append(attrs, attribute.String(k, v))
-				}
-				m.OtelObserve(ctx, counter, metricVal, attrs...)
-			}
+		if m.config.OtelMeter != nil {
+			m.OtelObserveSwitchMetrics(ctx, metrics)
 		}
 
 		if len(metrics) > 0 {
@@ -320,26 +287,8 @@ func (m *MetricsPipeline) run() (string, error) {
 			return "", fmt.Errorf("failed to collect link metrics; err: %w", err)
 		}
 
-		for counter, metrics := range metrics {
-			n := 2 + len(metrics[0].Labels) + len(metrics[0].Attributes)
-			if metrics[0].Hostname != "" {
-				n++
-			}
-			attrs := make([]attribute.KeyValue, 0, n)
-			for _, metricVal := range metrics {
-				attrs = append(attrs, attribute.String("nvlink", metricVal.GPU))
-				attrs = append(attrs, attribute.String("nvswitch", metricVal.GPUDevice))
-				if metricVal.Hostname != "" {
-					attrs = append(attrs, attribute.String("Hostname", metricVal.Hostname))
-				}
-				for k, v := range metricVal.Labels {
-					attrs = append(attrs, attribute.String(k, v))
-				}
-				for k, v := range metricVal.Attributes {
-					attrs = append(attrs, attribute.String(k, v))
-				}
-				m.OtelObserve(ctx, counter, metricVal, attrs...)
-			}
+		if m.config.OtelMeter != nil {
+			m.OtelObserveLinkMetrics(ctx, metrics)
 		}
 
 		if len(metrics) > 0 {
@@ -359,25 +308,8 @@ func (m *MetricsPipeline) run() (string, error) {
 			return "", fmt.Errorf("failed to collect CPU metrics; err: %w", err)
 		}
 
-		for counter, metrics := range metrics {
-			n := 1 + len(metrics[0].Labels) + len(metrics[0].Attributes)
-			if metrics[0].Hostname != "" {
-				n++
-			}
-			attrs := make([]attribute.KeyValue, 0, n)
-			for _, metricVal := range metrics {
-				attrs = append(attrs, attribute.String("cpu", metricVal.GPU))
-				if metricVal.Hostname != "" {
-					attrs = append(attrs, attribute.String("Hostname", metricVal.Hostname))
-				}
-				for k, v := range metricVal.Labels {
-					attrs = append(attrs, attribute.String(k, v))
-				}
-				for k, v := range metricVal.Attributes {
-					attrs = append(attrs, attribute.String(k, v))
-				}
-				m.OtelObserve(ctx, counter, metricVal, attrs...)
-			}
+		if m.config.OtelMeter != nil {
+			m.OtelObserveCpuMetrics(ctx, metrics)
 		}
 
 		if len(metrics) > 0 {
@@ -397,27 +329,8 @@ func (m *MetricsPipeline) run() (string, error) {
 			return "", fmt.Errorf("failed to collect CPU core metrics; err: %w", err)
 		}
 
-		for counter, metrics := range metrics {
-			n := 2 + len(metrics[0].Labels) + len(metrics[0].Attributes)
-			if metrics[0].Hostname != "" {
-				n++
-			}
-			attrs := make([]attribute.KeyValue, 0, n)
-			for _, metricVal := range metrics {
-				attrs = append(attrs, attribute.String("cpucore", metricVal.GPU))
-				attrs = append(attrs, attribute.String("cpu", metricVal.GPUDevice))
-				if metricVal.Hostname != "" {
-					attrs = append(attrs, attribute.String("Hostname", metricVal.Hostname))
-				}
-				for k, v := range metricVal.Labels {
-					attrs = append(attrs, attribute.String(k, v))
-				}
-				for k, v := range metricVal.Attributes {
-					attrs = append(attrs, attribute.String(k, v))
-				}
-				m.OtelObserve(ctx, counter, metricVal, attrs...)
-			}
-
+		if m.config.OtelMeter != nil {
+			m.OtelObserveCpuCoreMetrics(ctx, metrics)
 		}
 
 		if len(metrics) > 0 {
@@ -431,6 +344,134 @@ func (m *MetricsPipeline) run() (string, error) {
 	}
 
 	return formatted, nil
+}
+
+func (m *MetricsPipeline) OtelObserveGpuMetrics(ctx context.Context, metrics map[Counter][]Metric) {
+	for counter, metricVals := range metrics {
+		n := 5 + len(metricVals[0].Labels) + len(metricVals[0].Attributes)
+		if metricVals[0].MigProfile != "" {
+			n += 2
+		}
+		if metricVals[0].Hostname != "" {
+			n++
+		}
+		attrs := make([]attribute.KeyValue, 0, n)
+		for _, metricVal := range metricVals {
+			attrs = append(attrs, attribute.String("gpu", metricVal.GPU))
+			attrs = append(attrs, attribute.String(metricVal.UUID, metricVal.GPUUUID))
+			attrs = append(attrs, attribute.String("pci_bus_id", metricVal.GPUPCIBusID))
+			attrs = append(attrs, attribute.String("device", metricVal.GPUDevice))
+			attrs = append(attrs, attribute.String("modelName", metricVal.GPUModelName))
+			if metricVal.MigProfile != "" {
+				attrs = append(attrs, attribute.String("GPU_I_PROFILE", metricVal.MigProfile))
+				attrs = append(attrs, attribute.String("GPU_I_ID", metricVal.GPUInstanceID))
+			}
+			if metricVal.Hostname != "" {
+				attrs = append(attrs, attribute.String("Hostname", metricVal.Hostname))
+			}
+			for k, v := range metricVal.Labels {
+				attrs = append(attrs, attribute.String(k, v))
+			}
+			for k, v := range metricVal.Attributes {
+				attrs = append(attrs, attribute.String(k, v))
+			}
+			m.OtelObserve(ctx, counter, metricVal, attrs...)
+		}
+	}
+}
+
+func (m *MetricsPipeline) OtelObserveSwitchMetrics(ctx context.Context, metrics map[Counter][]Metric) {
+	for counter, metrics := range metrics {
+		n := 2 + len(metrics[0].Labels) + len(metrics[0].Attributes)
+		if metrics[0].Hostname != "" {
+			n++
+		}
+		attrs := make([]attribute.KeyValue, 0, n)
+		for _, metricVal := range metrics {
+			attrs = append(attrs, attribute.String("nvswitch", metricVal.GPU))
+			if metricVal.Hostname != "" {
+				attrs = append(attrs, attribute.String("Hostname", metricVal.Hostname))
+			}
+			for k, v := range metricVal.Labels {
+				attrs = append(attrs, attribute.String(k, v))
+			}
+			for k, v := range metricVal.Attributes {
+				attrs = append(attrs, attribute.String(k, v))
+			}
+			m.OtelObserve(ctx, counter, metricVal, attrs...)
+		}
+	}
+}
+
+func (m *MetricsPipeline) OtelObserveLinkMetrics(ctx context.Context, metrics map[Counter][]Metric) {
+	for counter, metrics := range metrics {
+		n := 2 + len(metrics[0].Labels) + len(metrics[0].Attributes)
+		if metrics[0].Hostname != "" {
+			n++
+		}
+		attrs := make([]attribute.KeyValue, 0, n)
+		for _, metricVal := range metrics {
+			attrs = append(attrs, attribute.String("nvlink", metricVal.GPU))
+			attrs = append(attrs, attribute.String("nvswitch", metricVal.GPUDevice))
+			if metricVal.Hostname != "" {
+				attrs = append(attrs, attribute.String("Hostname", metricVal.Hostname))
+			}
+			for k, v := range metricVal.Labels {
+				attrs = append(attrs, attribute.String(k, v))
+			}
+			for k, v := range metricVal.Attributes {
+				attrs = append(attrs, attribute.String(k, v))
+			}
+			m.OtelObserve(ctx, counter, metricVal, attrs...)
+		}
+	}
+}
+
+func (m *MetricsPipeline) OtelObserveCpuMetrics(ctx context.Context, metrics map[Counter][]Metric) {
+	for counter, metrics := range metrics {
+		n := 1 + len(metrics[0].Labels) + len(metrics[0].Attributes)
+		if metrics[0].Hostname != "" {
+			n++
+		}
+		attrs := make([]attribute.KeyValue, 0, n)
+		for _, metricVal := range metrics {
+			attrs = append(attrs, attribute.String("cpu", metricVal.GPU))
+			if metricVal.Hostname != "" {
+				attrs = append(attrs, attribute.String("Hostname", metricVal.Hostname))
+			}
+			for k, v := range metricVal.Labels {
+				attrs = append(attrs, attribute.String(k, v))
+			}
+			for k, v := range metricVal.Attributes {
+				attrs = append(attrs, attribute.String(k, v))
+			}
+			m.OtelObserve(ctx, counter, metricVal, attrs...)
+		}
+	}
+}
+
+func (m *MetricsPipeline) OtelObserveCpuCoreMetrics(ctx context.Context, metrics map[Counter][]Metric) {
+	for counter, metrics := range metrics {
+		n := 2 + len(metrics[0].Labels) + len(metrics[0].Attributes)
+		if metrics[0].Hostname != "" {
+			n++
+		}
+		attrs := make([]attribute.KeyValue, 0, n)
+		for _, metricVal := range metrics {
+			attrs = append(attrs, attribute.String("cpucore", metricVal.GPU))
+			attrs = append(attrs, attribute.String("cpu", metricVal.GPUDevice))
+			if metricVal.Hostname != "" {
+				attrs = append(attrs, attribute.String("Hostname", metricVal.Hostname))
+			}
+			for k, v := range metricVal.Labels {
+				attrs = append(attrs, attribute.String(k, v))
+			}
+			for k, v := range metricVal.Attributes {
+				attrs = append(attrs, attribute.String(k, v))
+			}
+			m.OtelObserve(ctx, counter, metricVal, attrs...)
+		}
+	}
 }
 
 func (m *MetricsPipeline) OtelObserve(ctx context.Context, counter Counter, metricVal Metric, attrs ...attribute.KeyValue) {

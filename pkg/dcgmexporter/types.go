@@ -71,7 +71,8 @@ type MetricsPipeline struct {
 	cpuCollector    *DCGMCollector
 	coreCollector   *DCGMCollector
 
-	otelMeters *OtelMeters
+	otelMeters  *OtelMeters
+	gpuCounters map[dcgm.Short]uint64
 }
 
 type OtelMeters struct {

@@ -310,11 +310,13 @@ restart:
 	cleanupDCGM := initDCGM(config)
 	defer cleanupDCGM()
 
-	cleanupOtel, err := initOtel(c.Context, config)
-	if err != nil {
-		return err
+	if config.OtelCollector != "" {
+		cleanupOtel, err := initOtel(c.Context, config)
+		if err != nil {
+			return err
+		}
+		defer cleanupOtel(context.Background())
 	}
-	defer cleanupOtel(context.Background())
 
 	logrus.Info("DCGM successfully initialized!")
 

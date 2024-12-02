@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"time"
 
 	"github.com/NVIDIA/dcgm-exporter/pkg/dcgmexporter"
 	"go.opentelemetry.io/otel"
@@ -23,14 +24,15 @@ func initOtelConn(addr string) (*grpc.ClientConn, error) {
 	return conn, nil
 }
 
-func initOtelMeterProvider(ctx context.Context, resource *resource.Resource, conn *grpc.ClientConn) (func(context.Context) error, error) {
+func initOtelMeterProvider(ctx context.Context, resource *resource.Resource, conn *grpc.ClientConn, interval time.Duration) (func(context.Context) error, error) {
 	metricExporter, err := otlpmetricgrpc.New(ctx, otlpmetricgrpc.WithGRPCConn(conn))
 	if err != nil {
 		return nil, err
 	}
 
+	// TODO: configurable interval
 	meterProvider := sdkmetric.NewMeterProvider(
-		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExporter)),
+		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExporter, sdkmetric.WithInterval(170*time.Millisecond))),
 		sdkmetric.WithResource(resource),
 	)
 	otel.SetMeterProvider(meterProvider)
@@ -48,7 +50,9 @@ func initOtel(ctx context.Context, c *dcgmexporter.Config) (func(context.Context
 		return nil, err
 	}
 
-	shutdown, err := initOtelMeterProvider(context.Background(), res, conn)
+	interval := time.Duration(c.CollectInterval) * time.Millisecond
+
+	shutdown, err := initOtelMeterProvider(context.Background(), res, conn, interval)
 	if err != nil {
 		return nil, err
 	}
