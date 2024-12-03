@@ -102,7 +102,7 @@ func NewMetricsPipeline(config *Config,
 	if config.OtelMeter != nil {
 		otelMeters = &OtelMeters{
 			Gauge:     make(map[string]metric.Float64Gauge),
-			Counter:   make(map[string]metric.Int64Counter),
+			Counter:   make(map[string]metric.Float64Counter),
 			Histogram: make(map[string]metric.Float64Histogram),
 		}
 
@@ -114,7 +114,7 @@ func NewMetricsPipeline(config *Config,
 					logrus.Warnf("Failed to create gauge metric %s: %v", counter.FieldName, err)
 				}
 			case "counter":
-				otelMeters.Counter[counter.FieldName], err = config.OtelMeter.Int64Counter(counter.FieldName, metric.WithDescription(counter.Help))
+				otelMeters.Counter[counter.FieldName], err = config.OtelMeter.Float64Counter(counter.FieldName, metric.WithDescription(counter.Help))
 				if err != nil {
 					logrus.Warnf("Failed to create counter metric %s: %v", counter.FieldName, err)
 				}
@@ -495,7 +495,7 @@ func (m *MetricsPipeline) OtelObserve(ctx context.Context, counter Counter, metr
 			logrus.Warnf("Counter %s not found in otelMeters", counter.FieldName)
 			return
 		}
-		val, err := strconv.ParseInt(metricVal.Value, 10, 64)
+		val, err := strconv.ParseFloat(metricVal.Value, 64)
 		if err != nil {
 			logrus.Warnf("Failed to parse metric value %s as int64: %v", metricVal.Value, err)
 			return

@@ -79,7 +79,7 @@ type MetricsPipeline struct {
 
 type OtelMeters struct {
 	Gauge     map[string]metric.Float64Gauge
-	Counter   map[string]metric.Int64Counter
+	Counter   map[string]metric.Float64Counter
 	Histogram map[string]metric.Float64Histogram
 }
 
