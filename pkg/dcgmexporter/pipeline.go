@@ -144,7 +144,7 @@ func NewMetricsPipeline(config *Config,
 			cpuCollector:    cpuCollector,
 			coreCollector:   coreCollector,
 			otelMeters:      otelMeters,
-			gpuCounters:     make(map[string]uint64),
+			gpuCounters:     make(map[string]float64),
 		}, func() {
 			for _, cleanup := range cleanups {
 				cleanup()
@@ -252,7 +252,7 @@ func (m *MetricsPipeline) run() (string, error) {
 			newMetrics := make([]Metric, 0, len(metricVals))
 			for _, metricVal := range metricVals {
 				fp := metricVal.metricFingerprint()
-				val, err := strconv.ParseUint(metricVal.Value, 10, 64)
+				val, err := strconv.ParseFloat(metricVal.Value, 64)
 				if err != nil {
 					logrus.Warnf("Failed to parse metric value %s as uint64: %v", metricVal.Value, err)
 					continue
@@ -260,7 +260,7 @@ func (m *MetricsPipeline) run() (string, error) {
 				m.gpuCounters[fp] += val
 				newMetricVal := metricVal
 				newMetricVal.Counter = newCounter
-				newMetricVal.Value = strconv.FormatUint(m.gpuCounters[fp], 10)
+				newMetricVal.Value = strconv.FormatFloat(m.gpuCounters[fp], 'f', -1, 64)
 				newMetrics = append(newMetrics, newMetricVal)
 			}
 			extended[newCounter] = newMetrics

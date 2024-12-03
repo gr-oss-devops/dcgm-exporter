@@ -74,7 +74,7 @@ type MetricsPipeline struct {
 	coreCollector   *DCGMCollector
 
 	otelMeters  *OtelMeters
-	gpuCounters map[string]uint64
+	gpuCounters map[string]float64
 }
 
 type OtelMeters struct {
