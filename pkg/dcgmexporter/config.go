@@ -17,6 +17,7 @@
 package dcgmexporter
 
 import (
+	"github.com/NVIDIA/dcgm-exporter/pkg/dcgmexporter/podwatcher"
 	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
 	"go.opentelemetry.io/otel/metric"
 )
@@ -64,4 +65,7 @@ type Config struct {
 	NvidiaResourceNames        []string
 	OtelCollector              string
 	OtelMeter                  metric.Meter
+	OtelInheritPodLabels       []string
+	OtelInheritPodAnnotations  []string
+	PodWatcher                 *podwatcher.PodWatcher
 }

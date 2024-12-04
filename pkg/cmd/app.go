@@ -21,6 +21,7 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"github.com/NVIDIA/dcgm-exporter/pkg/dcgmexporter"
+	"github.com/NVIDIA/dcgm-exporter/pkg/dcgmexporter/podwatcher"
 	"github.com/NVIDIA/dcgm-exporter/pkg/stdout"
 )
 
@@ -76,6 +77,8 @@ const (
 	CLIHPCJobMappingDir           = "hpc-job-mapping-dir"
 	CLINvidiaResourceNames        = "nvidia-resource-names"
 	CLIOtelCollector              = "otel-collector"
+	CLIOtelInheritPodLabels       = "otel-inherit-pod-labels"
+	CLIOtelInheritPodAnnotations  = "otel-inherit-pod-annotations"
 )
 
 func NewApp(buildVersion ...string) *cli.App {
@@ -251,6 +254,18 @@ func NewApp(buildVersion ...string) *cli.App {
 			Usage:   "Address of the OpenTelemetry collector to send metrics to.",
 			EnvVars: []string{"DCGM_EXPORTER_OTEL_COLLECTOR"},
 		},
+		&cli.StringSliceFlag{
+			Name:    CLIOtelInheritPodLabels,
+			Value:   cli.NewStringSlice(),
+			Usage:   "List of pod labels to inherit from the pod observed.",
+			EnvVars: []string{"DCGM_EXPORTER_OTEL_INHERIT_POD_LABELS"},
+		},
+		&cli.StringSliceFlag{
+			Name:    CLIOtelInheritPodAnnotations,
+			Value:   cli.NewStringSlice(),
+			Usage:   "List of pod annotations to inherit from the pod observed.",
+			EnvVars: []string{"DCGM_EXPORTER_OTEL_INHERIT_POD_ANNOTATIONS"},
+		},
 	}
 
 	if runtime.GOOS == "linux" {
@@ -333,6 +348,19 @@ restart:
 	hostname, err := dcgmexporter.GetHostname(config)
 	if err != nil {
 		return err
+	}
+
+	if config.Kubernetes {
+		podWatcher, err := podwatcher.New()
+		if err != nil {
+			return err
+		}
+		go func() {
+			if err := podWatcher.Run(c.Context); err != nil {
+				logrus.Errorf("PodWatcher failed: %v", err)
+			}
+		}()
+		config.PodWatcher = podWatcher
 	}
 
 	pipeline, cleanup, err := dcgmexporter.NewMetricsPipeline(config,
@@ -656,5 +684,7 @@ func contextToConfig(c *cli.Context) (*dcgmexporter.Config, error) {
 		HPCJobMappingDir:           c.String(CLIHPCJobMappingDir),
 		NvidiaResourceNames:        c.StringSlice(CLINvidiaResourceNames),
 		OtelCollector:              c.String(CLIOtelCollector),
+		OtelInheritPodLabels:       c.StringSlice(CLIOtelInheritPodLabels),
+		OtelInheritPodAnnotations:  c.StringSlice(CLIOtelInheritPodAnnotations),
 	}, nil
 }

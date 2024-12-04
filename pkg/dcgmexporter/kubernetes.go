@@ -98,6 +98,20 @@ func (p *PodMapper) Process(metrics MetricsByCounter, sysInfo SystemInfo) error 
 					metrics[counter][j].Attributes[oldContainerAttribute] = podInfo.Container
 				}
 			}
+
+			podMeta := p.Config.PodWatcher.GetObjectMeta(podInfo.Namespace, podInfo.Name)
+			if podMeta != nil {
+				for _, lbl := range p.Config.OtelInheritPodLabels {
+					if val, exists := podMeta.Labels[lbl]; exists {
+						metrics[counter][j].Labels[lbl] = val
+					}
+				}
+				for _, ann := range p.Config.OtelInheritPodAnnotations {
+					if val, exists := podMeta.Annotations[ann]; exists {
+						metrics[counter][j].Attributes[ann] = val
+					}
+				}
+			}
 		}
 	}
 
