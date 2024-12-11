@@ -63,9 +63,16 @@ type Config struct {
 	PodResourcesKubeletSocket  string
 	HPCJobMappingDir           string
 	NvidiaResourceNames        []string
-	OtelCollector              string
-	OtelMeter                  metric.Meter
-	OtelInheritPodLabels       []string
-	OtelInheritPodAnnotations  []string
-	PodWatcher                 *podwatcher.PodWatcher
+	// OtelMeter is the OpenTelemetry meter to use for metrics
+	// If nil, the OpenTelemetry is disabled
+	OtelMeter                 metric.Meter
+	OtelInheritPodLabels      []string
+	OtelInheritPodAnnotations []string
+	// PodWatcher builds up the pod cache to be used
+	// for propagating labels and annotations to otel meters
+	PodWatcher *podwatcher.PodWatcher
+}
+
+func (c *Config) OtelEnabled() bool {
+	return os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != ""
 }

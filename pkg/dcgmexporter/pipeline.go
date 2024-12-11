@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"maps"
 	"strconv"
+	"strings"
 	"sync"
 	"text/template"
 	"time"
@@ -488,6 +489,13 @@ func (m *MetricsPipeline) OtelObserveCpuCoreMetrics(ctx context.Context, metrics
 }
 
 func (m *MetricsPipeline) OtelObserve(ctx context.Context, counter Counter, metricVal Metric, attrs ...attribute.KeyValue) {
+	// Transform attributes to follow otel convention of lowercase
+	attributes := make([]attribute.KeyValue, 0, len(attrs))
+	for _, attr := range attrs {
+		attr.Key = attribute.Key(strings.ToLower(string(attr.Key)))
+		attributes = append(attributes, attr)
+	}
+
 	switch counter.PromType {
 	case "counter":
 		c, ok := m.otelMeters.Counter[counter.FieldName]

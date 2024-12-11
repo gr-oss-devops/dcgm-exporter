@@ -17,10 +17,11 @@
 package dcgmexporter
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"sort"
-	"strings"
 	"sync"
 	"text/template"
 
@@ -121,29 +122,28 @@ type Metric struct {
 }
 
 // metricFingerprint produces a string that should uniquely identify a metric
-// It is in no way the most performant way to do this, but it is simple and should be sufficien.
+// It is in no way the most performant way to do this, but it is simple and should be sufficient.
 // The idea is to identify the metric by name and labels, so it could be used when selecting a right counter
 // for a metric.
 func (m *Metric) metricFingerprint() string {
-	var sb strings.Builder
-	sb.Grow(256)
-	fmt.Fprintf(&sb, "name=%s,", m.Counter.FieldName)
-	fmt.Fprintf(&sb, "gpu=%s,", m.GPU)
-	fmt.Fprintf(&sb, "gpu_uuid=%s,", m.GPUUUID)
-	fmt.Fprintf(&sb, "gpu_device=%s,", m.GPUDevice)
-	fmt.Fprintf(&sb, "gpu_model_name=%s,", m.GPUModelName)
-	fmt.Fprintf(&sb, "gpu_pci_bus_id=%s,", m.GPUPCIBusID)
-	fmt.Fprintf(&sb, "uuid=%s,", m.UUID)
-	fmt.Fprintf(&sb, "mig_profile=%s,", m.MigProfile)
-	fmt.Fprintf(&sb, "gpu_instance_id=%s,", m.GPUInstanceID)
-	fmt.Fprintf(&sb, "hostname=%s,", m.Hostname)
+	sb := sha256.New()
+	fmt.Fprintf(sb, "name=%s,", m.Counter.FieldName)
+	fmt.Fprintf(sb, "gpu=%s,", m.GPU)
+	fmt.Fprintf(sb, "gpu_uuid=%s,", m.GPUUUID)
+	fmt.Fprintf(sb, "gpu_device=%s,", m.GPUDevice)
+	fmt.Fprintf(sb, "gpu_model_name=%s,", m.GPUModelName)
+	fmt.Fprintf(sb, "gpu_pci_bus_id=%s,", m.GPUPCIBusID)
+	fmt.Fprintf(sb, "uuid=%s,", m.UUID)
+	fmt.Fprintf(sb, "mig_profile=%s,", m.MigProfile)
+	fmt.Fprintf(sb, "gpu_instance_id=%s,", m.GPUInstanceID)
+	fmt.Fprintf(sb, "hostname=%s,", m.Hostname)
 	keys := make([]string, 0, max(len(m.Labels), len(m.Attributes)))
 	for k := range m.Labels {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		fmt.Fprintf(&sb, "%s=%s,", k, m.Labels[k])
+		fmt.Fprintf(sb, "%s=%s,", k, m.Labels[k])
 	}
 	keys = keys[:0]
 	for k := range m.Attributes {
@@ -151,9 +151,9 @@ func (m *Metric) metricFingerprint() string {
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		fmt.Fprintf(&sb, "%s=%s,", k, m.Attributes[k])
+		fmt.Fprintf(sb, "%s=%s,", k, m.Attributes[k])
 	}
-	return sb.String()
+	return hex.EncodeToString(sb.Sum(nil))
 }
 
 func (m Metric) getIDOfType(idType KubernetesGPUIDType) (string, error) {
