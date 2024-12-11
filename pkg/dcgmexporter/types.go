@@ -126,24 +126,24 @@ type Metric struct {
 // The idea is to identify the metric by name and labels, so it could be used when selecting a right counter
 // for a metric.
 func (m *Metric) metricFingerprint() string {
-	sb := sha256.New()
-	fmt.Fprintf(sb, "name=%s,", m.Counter.FieldName)
-	fmt.Fprintf(sb, "gpu=%s,", m.GPU)
-	fmt.Fprintf(sb, "gpu_uuid=%s,", m.GPUUUID)
-	fmt.Fprintf(sb, "gpu_device=%s,", m.GPUDevice)
-	fmt.Fprintf(sb, "gpu_model_name=%s,", m.GPUModelName)
-	fmt.Fprintf(sb, "gpu_pci_bus_id=%s,", m.GPUPCIBusID)
-	fmt.Fprintf(sb, "uuid=%s,", m.UUID)
-	fmt.Fprintf(sb, "mig_profile=%s,", m.MigProfile)
-	fmt.Fprintf(sb, "gpu_instance_id=%s,", m.GPUInstanceID)
-	fmt.Fprintf(sb, "hostname=%s,", m.Hostname)
+	fingerprint := sha256.New()
+	fmt.Fprintf(fingerprint, "name=%s,", m.Counter.FieldName)
+	fmt.Fprintf(fingerprint, "gpu=%s,", m.GPU)
+	fmt.Fprintf(fingerprint, "gpu_uuid=%s,", m.GPUUUID)
+	fmt.Fprintf(fingerprint, "gpu_device=%s,", m.GPUDevice)
+	fmt.Fprintf(fingerprint, "gpu_model_name=%s,", m.GPUModelName)
+	fmt.Fprintf(fingerprint, "gpu_pci_bus_id=%s,", m.GPUPCIBusID)
+	fmt.Fprintf(fingerprint, "uuid=%s,", m.UUID)
+	fmt.Fprintf(fingerprint, "mig_profile=%s,", m.MigProfile)
+	fmt.Fprintf(fingerprint, "gpu_instance_id=%s,", m.GPUInstanceID)
+	fmt.Fprintf(fingerprint, "hostname=%s,", m.Hostname)
 	keys := make([]string, 0, max(len(m.Labels), len(m.Attributes)))
 	for k := range m.Labels {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		fmt.Fprintf(sb, "%s=%s,", k, m.Labels[k])
+		fmt.Fprintf(fingerprint, "%s=%s,", k, m.Labels[k])
 	}
 	keys = keys[:0]
 	for k := range m.Attributes {
@@ -151,9 +151,9 @@ func (m *Metric) metricFingerprint() string {
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		fmt.Fprintf(sb, "%s=%s,", k, m.Attributes[k])
+		fmt.Fprintf(fingerprint, "%s=%s,", k, m.Attributes[k])
 	}
-	return hex.EncodeToString(sb.Sum(nil))
+	return hex.EncodeToString(fingerprint.Sum(nil))
 }
 
 func (m Metric) getIDOfType(idType KubernetesGPUIDType) (string, error) {
