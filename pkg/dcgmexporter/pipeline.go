@@ -107,22 +107,25 @@ func NewMetricsPipeline(config *Config,
 			Histogram: make(map[string]metric.Float64Histogram),
 		}
 
+		onErrCleanupFunc := func() {}
+
 		for _, counter := range counters {
+			fieldName := strings.ToLower(counter.FieldName)
 			switch counter.PromType {
 			case "gauge":
-				otelMeters.Gauge[counter.FieldName], err = config.OtelMeter.Float64Gauge(counter.FieldName, metric.WithDescription(counter.Help))
+				otelMeters.Gauge[fieldName], err = config.OtelMeter.Float64Gauge(fieldName, metric.WithDescription(counter.Help))
 				if err != nil {
-					logrus.Warnf("Failed to create gauge metric %s: %v", counter.FieldName, err)
+					return nil, onErrCleanupFunc, fmt.Errorf("failed to create gauge metric %s: %v", counter.FieldName, err)
 				}
 			case "counter":
-				otelMeters.Counter[counter.FieldName], err = config.OtelMeter.Float64Counter(counter.FieldName, metric.WithDescription(counter.Help))
+				otelMeters.Counter[fieldName], err = config.OtelMeter.Float64Counter(fieldName, metric.WithDescription(counter.Help))
 				if err != nil {
-					logrus.Warnf("Failed to create counter metric %s: %v", counter.FieldName, err)
+					return nil, onErrCleanupFunc, fmt.Errorf("failed to create counter metric %s: %v", counter.FieldName, err)
 				}
 			case "histogram":
-				otelMeters.Histogram[counter.FieldName], err = config.OtelMeter.Float64Histogram(counter.FieldName, metric.WithDescription(counter.Help))
+				otelMeters.Histogram[fieldName], err = config.OtelMeter.Float64Histogram(fieldName, metric.WithDescription(counter.Help))
 				if err != nil {
-					logrus.Warnf("Failed to create histogram metric %s: %v", counter.FieldName, err)
+					return nil, onErrCleanupFunc, fmt.Errorf("failed to create histogram metric %s: %v", counter.FieldName, err)
 				}
 			}
 		}
@@ -490,47 +493,40 @@ func (m *MetricsPipeline) OtelObserveCpuCoreMetrics(ctx context.Context, metrics
 
 func (m *MetricsPipeline) OtelObserve(ctx context.Context, counter Counter, metricVal Metric, attrs ...attribute.KeyValue) {
 	// Transform attributes to follow otel convention of lowercase
-	attributes := make([]attribute.KeyValue, 0, len(attrs))
-	for _, attr := range attrs {
-		attr.Key = attribute.Key(strings.ToLower(string(attr.Key)))
-		attributes = append(attributes, attr)
+	for i := range attrs {
+		attrs[i].Key = attribute.Key(strings.ToLower(string(attrs[i].Key)))
 	}
 
+	fieldName := strings.ToLower(counter.FieldName)
 	switch counter.PromType {
 	case "counter":
-		c, ok := m.otelMeters.Counter[counter.FieldName]
+		c, ok := m.otelMeters.Counter[fieldName]
 		if !ok {
-			logrus.Warnf("Counter %s not found in otelMeters", counter.FieldName)
-			return
+			panic(fmt.Sprintf("Counter %q not found in otelMeters", fieldName))
 		}
 		val, err := strconv.ParseFloat(metricVal.Value, 64)
 		if err != nil {
-			logrus.Warnf("Failed to parse metric value %s as int64: %v", metricVal.Value, err)
-			return
+			panic(fmt.Sprintf("Failed to parse metric value %s as float64: %v", metricVal.Value, err))
 		}
 		c.Add(ctx, val, metric.WithAttributes(attrs...))
 	case "gauge":
-		g, ok := m.otelMeters.Gauge[counter.FieldName]
+		g, ok := m.otelMeters.Gauge[fieldName]
 		if !ok {
-			logrus.Warnf("Gauge %s not found in otelMeters", counter.FieldName)
-			return
+			panic(fmt.Sprintf("Gauge %q not found in otelMeters", fieldName))
 		}
 		val, err := strconv.ParseFloat(metricVal.Value, 64)
 		if err != nil {
-			logrus.Warnf("Failed to parse metric value %s as float64: %v", metricVal.Value, err)
-			return
+			panic(fmt.Sprintf("Failed to parse metric value %s as float64: %v", metricVal.Value, err))
 		}
 		g.Record(ctx, val, metric.WithAttributes(attrs...))
 	case "histogram":
-		h, ok := m.otelMeters.Histogram[counter.FieldName]
+		h, ok := m.otelMeters.Histogram[fieldName]
 		if !ok {
-			logrus.Warnf("Histogram %s not found in otelMeters", counter.FieldName)
-			return
+			panic(fmt.Sprintf("Histogram %q not found in otelMeters", fieldName))
 		}
 		val, err := strconv.ParseFloat(metricVal.Value, 64)
 		if err != nil {
-			logrus.Warnf("Failed to parse metric value %s as float64: %v", metricVal.Value, err)
-			return
+			panic(fmt.Sprintf("Failed to parse metric value %s as float64: %v", metricVal.Value, err))
 		}
 		h.Record(ctx, val, metric.WithAttributes(attrs...))
 	}

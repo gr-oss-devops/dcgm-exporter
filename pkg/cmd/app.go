@@ -304,6 +304,8 @@ func action(c *cli.Context) (err error) {
 }
 
 func startDCGMExporter(c *cli.Context, cancel context.CancelFunc) error {
+	ctx, cancel := context.WithCancel(c.Context)
+	defer cancel()
 restart:
 
 	logrus.Info("Starting dcgm-exporter")
@@ -320,7 +322,7 @@ restart:
 
 	otelEnabled := config.OtelEnabled()
 	if otelEnabled {
-		cleanupOtel, err := initOtel(c.Context, config)
+		cleanupOtel, err := initOtel(ctx, config)
 		if err != nil {
 			return err
 		}
@@ -350,7 +352,8 @@ restart:
 			return err
 		}
 		go func() {
-			if err := podWatcher.Run(c.Context); err != nil {
+			if err := podWatcher.Run(ctx); err != nil {
+				cancel()
 				logrus.Errorf("PodWatcher failed: %v", err)
 			}
 		}()
