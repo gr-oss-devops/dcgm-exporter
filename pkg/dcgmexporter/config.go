@@ -16,7 +16,11 @@
 
 package dcgmexporter
 
-import "github.com/NVIDIA/go-dcgm/pkg/dcgm"
+import (
+	"github.com/NVIDIA/dcgm-exporter/pkg/dcgmexporter/podwatcher"
+	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
+	"go.opentelemetry.io/otel/metric"
+)
 
 type KubernetesGPUIDType string
 
@@ -59,4 +63,16 @@ type Config struct {
 	PodResourcesKubeletSocket  string
 	HPCJobMappingDir           string
 	NvidiaResourceNames        []string
+	// OtelMeter is the OpenTelemetry meter to use for metrics
+	// If nil, the OpenTelemetry is disabled
+	OtelMeter                 metric.Meter
+	OtelInheritPodLabels      []string
+	OtelInheritPodAnnotations []string
+	// PodWatcher builds up the pod cache to be used
+	// for propagating labels and annotations to otel meters
+	PodWatcher *podwatcher.PodWatcher
+}
+
+func (c *Config) OtelEnabled() bool {
+	return os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != ""
 }
