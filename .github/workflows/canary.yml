@@ -1,0 +1,37 @@
+name: Canary
+
+on:
+  workflow_run:
+    workflows: [Go]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: canary
+    strategy:
+        matrix:
+            arch: [ linux/amd64, linux/arm64 ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.21
+
+      - name: Extract version
+        id: get_version
+        run: echo "VERSION=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Run build
+        run: make ubuntu22.04 ubi9 PLATFORMS=${{ matrix.arch }} OUTPUT=type=docker REGISTRY=gresearch FULL_VERSION=${{ steps.get_version.outputs.VERSION }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      - name: Push to Docker Hub
+        run: docker images | grep 'gresearch/dcgm-exporter' | awk '{print $1":"$2}' | xargs -I {} sh -c 'docker push {}'
