@@ -26,8 +26,8 @@ jobs:
 
       - name: Install tools
         run: |
-          apt-get update
-          apt-get install -y g++ gcc libc6-dev make pkg-config wget
+          sudo apt-get update
+          sudo apt-get install -y g++ gcc libc6-dev make pkg-config wget
 
       - name: Run build
         run: make ubuntu22.04 ubi9 PLATFORMS=${{ matrix.arch }} OUTPUT=type=docker REGISTRY=gresearch FULL_VERSION=${{ steps.get_version.outputs.VERSION }}
