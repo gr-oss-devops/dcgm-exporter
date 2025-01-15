@@ -29,6 +29,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y g++ gcc libc6-dev make pkg-config wget
 
+      - name: Set up QEMU
+        if: ${{ matrix.arch == 'linux/arm64' }}
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: ${{ matrix.arch == 'linux/arm64' }}
+        uses: docker/setup-buildx-action@v3
+
       - name: Run build
         run: make ubuntu22.04 ubi9 PLATFORMS=${{ matrix.arch }} OUTPUT=type=docker REGISTRY=gresearch FULL_VERSION=${{ steps.get_version.outputs.VERSION }}
 
