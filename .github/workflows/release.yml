@@ -42,4 +42,4 @@ jobs:
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
       - name: Push to Docker Hub
-        run: docker images | grep 'gresearch/dcgm-exporter' | awk '{print $1":"$2}' | xargs -I {} sh -c 'docker push {}'
+        run: docker images | grep '${{ vars.DOCKERHUB_REGISTRY }}/dcgm-exporter' | awk '{print $1":"$2}' | xargs -I {} sh -c 'docker push {}'
