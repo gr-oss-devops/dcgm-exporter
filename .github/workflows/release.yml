@@ -20,16 +20,10 @@ jobs:
         with:
           fetch-tags: 1
 
-      - name: Extract Go Version
-        id: get-go-version
-        run: |
-          GO_VERSION=$(go mod edit -json | jq -r '.Go')
-          echo "GO_VERSION=$GO_VERSION" >> $GITHUB_ENV
-
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: "go.mod"
 
       - name: Extract version
         id: get_version
