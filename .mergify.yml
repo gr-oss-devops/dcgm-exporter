@@ -1,0 +1,14 @@
+pull_request_rules:
+  - name: Require approval from DCGM exporter contributors
+    conditions:
+      - "#approved-reviews-by>=1"
+    actions:
+      post_check:
+        success_conditions:
+          - or:
+              - "#approved-reviews-by>=2"
+              - and:
+                  - "#approved-reviews-by>=1"
+                  - "author~=^(d80tb7|dave[-]gantenbein|masipauskas|nikola-jokic|m4rs[-]mt)"
+        title:
+          Two checks are required.
